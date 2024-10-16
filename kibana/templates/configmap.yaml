@@ -1,13 +1,32 @@
-{{- if .Values.kibanaConfig }}
----
+{{- /*
+Copyright Broadcom, Inc. All Rights Reserved.
+SPDX-License-Identifier: APACHE-2.0
+*/}}
+
+{{- if and (not .Values.configurationCM) (and .Values.elasticsearch.hosts .Values.elasticsearch.port) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ template "kibana.fullname" . }}-config
-  labels: {{ include "kibana.labels" . | nindent 4 }}
+  name: {{printf "%s-conf" (include "common.names.fullname" .) }}
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
 data:
-{{- range $path, $config := .Values.kibanaConfig }}
-  {{ $path }}: |
-{{ tpl $config $ | indent 4 -}}
-{{- end -}}
-{{- end -}}
+  kibana.yml: |
+    pid.file: /opt/bitnami/kibana/tmp/kibana.pid
+    server.host: "::"
+    server.port: {{ .Values.containerPorts.http }}
+    elasticsearch.hosts: [{{ include "kibana.elasticsearch.url" . }}]
+    {{- if .Values.configuration.server.basePath }}
+    server.basePath: {{ .Values.configuration.server.basePath | quote }}
+    {{- end }}
+    {{- if or .Values.configuration.server.publicBaseUrl .Values.ingress.enabled }}
+    server.publicBaseUrl: {{ default .Values.ingress.hostname .Values.configuration.server.publicBaseUrl }}
+    {{- end }}
+    server.rewriteBasePath: {{ .Values.configuration.server.rewriteBasePath }}
+    {{- if .Values.extraConfiguration }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.extraConfiguration "context" $ ) | nindent 4 }}
+    {{- end }}
+{{- end }}
